@@ -1,0 +1,98 @@
+import { observable, action } from "mobx";
+import {
+  makeFavorite,
+  makeUnfavorite,
+  setSelectedPicture,
+  listPictures,
+} from "./CommonActions";
+
+export default class SearchPageStore {
+  rootStore;
+  transportLayer;
+  localStorageClient;
+
+  @observable
+  isLoading = false;
+
+  @observable
+  currentPage = 1;
+
+  @observable
+  totalPages = 0;
+
+  @observable
+  search = "";
+
+  @observable
+  errors = [];
+
+  constructor(rootStore, transportLayer, localStorageClient) {
+    this.rootStore = rootStore;
+    this.transportLayer = transportLayer;
+    this.localStorageClient = localStorageClient;
+    this.listPictures = listPictures(rootStore);
+  }
+
+  @action
+  setSearchQuery(query) {
+    this.search = query;
+  }
+
+  @action
+  loadPictures(page = this.currentPage) {
+    this.isLoading = true;
+    return this.transportLayer.search(this.search, page).then(
+      action(({ results, total_pages }) => {
+        const pictures = results.map((result) =>
+          this.convertResultToPicture(result)
+        );
+        this.rootStore.picturesStore.picturesRegistry = pictures;
+        this.currentPage = parseInt(page, 10);
+        this.totalPages = parseInt(total_pages, 10);
+        this.errors = [];
+        this.isLoading = false;
+        console.log(total_pages, this.totalPages);
+      }),
+      action(({ errors }) => {
+        this.rootStore.picturesStore.picturesRegistry = [];
+        this.currentPage = 1;
+        this.totalPages = 0;
+        this.errors = errors;
+        this.isLoading = false;
+      })
+    );
+  }
+
+  @action
+  loadPicturesOnPreviousPage() {
+    this.currentPage = this.currentPage - 1 >= 1 ? this.currentPage - 1 : 1;
+    this.loadPictures(this.currentPage);
+  }
+
+  @action
+  loadPicturesOnNextPage() {
+    this.currentPage =
+      this.currentPage + 1 <= this.totalPages
+        ? this.currentPage + 1
+        : this.totalPages;
+    this.loadPictures(this.currentPage);
+  }
+
+  isItFavorite(pictureId) {
+    return (
+      this.localStorageClient.readAll().filter((f) => f.id === pictureId)[0] !==
+      undefined
+    );
+  }
+
+  convertResultToPicture({ id, description, urls, user }) {
+    return {
+      id,
+      description,
+      urls,
+      user,
+      isFavorite: this.isItFavorite(id),
+      error: false,
+    };
+  }
+}

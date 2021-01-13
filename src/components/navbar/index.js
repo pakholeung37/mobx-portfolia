@@ -1,3 +1,3 @@
-import c from "./Navbar"
+import c from "./Navbar";
 
-export default c
+export default c;
